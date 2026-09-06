@@ -14,6 +14,31 @@ def clean_db():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
 
+<<<<<<< HEAD
+=======
+def test_register_rejects_password_over_bcrypt_byte_limit():
+    response = client.post("/api/auth/register", json={
+        "email": "long-password@example.com",
+        "username": "longpassword",
+        "full_name": "Long Password",
+        "password": "a" * 73,
+    })
+
+    assert response.status_code == 422
+    assert "Password cannot be longer than 72 bytes." in response.text
+
+def test_register_rejects_multibyte_password_over_bcrypt_byte_limit():
+    response = client.post("/api/auth/register", json={
+        "email": "long-emoji-password@example.com",
+        "username": "longemojipassword",
+        "full_name": "Long Emoji Password",
+        "password": "😀" * 19,
+    })
+
+    assert response.status_code == 422
+    assert "Password cannot be longer than 72 bytes." in response.text
+
+>>>>>>> master
 def test_full_roomie_flow():
     # 1. Register User 1 (Amit)
     r1 = client.post("/api/auth/register", json={
