@@ -339,3 +339,97 @@ def invite_user_to_room(
         created_at=new_mem.created_at,
         responded_at=new_mem.responded_at,
     )
+
+@router.delete("/{room_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_room(
+    room_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Permanently delete a room. Only the room creator can do this."""
+    room = db.query(Room).filter(Room.id == room_id).first()
+    if not room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Room not found",
+        )
+    if room.created_by_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the room creator can delete this room",
+        )
+
+    db.delete(room)
+    db.commit()
+    return None
+
+@router.delete("/{room_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_room_member(
+    room_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Remove a member from the room.
+    - Room creator can remove anyone.
+    - Any member can remove themselves (leave the room).
+    """
+    room = db.query(Room).filter(Room.id == room_id).first()
+    if not room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Room not found",
+        )
+
+    # Check requester is an active member
+    requester_mem = (
+        db.query(RoomMembership)
+        .filter(
+            RoomMembership.room_id == room_id,
+            RoomMembership.user_id == current_user.id,
+            RoomMembership.status == MembershipStatus.ACCEPTED.value,
+        )
+        .first()
+    )
+    if not requester_mem:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not an active member of this room",
+        )
+
+    # Permission check
+    is_creator = room.created_by_id == current_user.id
+    is_self_leave = user_id == current_user.id
+    if not is_creator and not is_self_leave:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the room creator can remove other members",
+        )
+
+    # Cannot remove the creator (creator must delete the room instead)
+    if user_id == room.created_by_id and not is_self_leave:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot remove the room creator. Creator should delete the room instead.",
+        )
+
+    target_mem = (
+        db.query(RoomMembership)
+        .filter(
+            RoomMembership.room_id == room_id,
+            RoomMembership.user_id == user_id,
+            RoomMembership.status == MembershipStatus.ACCEPTED.value,
+        )
+        .first()
+    )
+    if not target_mem:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Member not found in this room",
+        )
+
+    db.delete(target_mem)
+    db.commit()
+    return None
+

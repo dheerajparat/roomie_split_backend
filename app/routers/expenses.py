@@ -3,7 +3,6 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
-from app.models.room import Room
 from app.models.membership import RoomMembership, MembershipStatus
 from app.models.expense import Expense, ExpenseSplit
 from app.models.user import User
@@ -209,14 +208,14 @@ def delete_expense(
             detail="Expense not found",
         )
 
-    # Allow payer or room creator to delete
-    room = db.query(Room).filter(Room.id == room_id).first()
-    if exp.paid_by_id != current_user.id and (room and room.created_by_id != current_user.id):
+    # Only the payer of the expense can delete it
+    if exp.paid_by_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to delete this expense",
+            detail="Only the person who paid for this expense can delete it",
         )
 
     db.delete(exp)
     db.commit()
     return None
+

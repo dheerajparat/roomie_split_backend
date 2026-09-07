@@ -36,5 +36,17 @@ class SettlementOut(BaseModel):
     amount: float
     settled_at: datetime
     notes: Optional[str]
+    is_verified: bool = False
+    verified_by_id: Optional[int] = None
+    verified_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+class SettlementVerifyOut(BaseModel):
+    id: int
+    is_verified: bool
+    verified_by_id: int
+    verified_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
