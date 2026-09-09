@@ -6,12 +6,47 @@ from app.db.session import get_db
 from app.models.membership import RoomMembership, MembershipStatus
 from app.models.settlement import Settlement
 from app.models.user import User
-from app.schemas.balance import BalanceSummary, SettlementCreate, SettlementOut, SettlementVerifyOut
+from app.schemas.balance import (
+    BalanceSummary,
+    SettlementCreate,
+    SettlementNotificationOut,
+    SettlementOut,
+    SettlementVerifyOut,
+)
 from app.schemas.user import UserOut
 from app.services.calculation import compute_room_balances
 from app.routers.deps import get_current_user
 
 router = APIRouter(prefix="/rooms", tags=["balances"])
+
+@router.get("/settlements/pending", response_model=List[SettlementNotificationOut])
+def list_pending_settlement_notifications(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return settlement approvals waiting for the current receiver."""
+    settlements = (
+        db.query(Settlement)
+        .filter(
+            Settlement.receiver_id == current_user.id,
+            Settlement.is_verified.is_(False),
+        )
+        .order_by(Settlement.settled_at.desc())
+        .all()
+    )
+
+    return [
+        SettlementNotificationOut(
+            settlement_id=settlement.id,
+            room_id=settlement.room_id,
+            room_name=settlement.room.name,
+            payer=UserOut.model_validate(settlement.payer),
+            amount=settlement.amount,
+            settled_at=settlement.settled_at,
+            notes=settlement.notes,
+        )
+        for settlement in settlements
+    ]
 
 @router.get("/{room_id}/balances", response_model=BalanceSummary)
 def get_balances(

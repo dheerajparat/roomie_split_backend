@@ -51,7 +51,15 @@ def compute_room_balances(db: Session, room_id: int) -> BalanceSummary:
                     active_users[split.user_id] = split.user
 
     # 3. Fetch all settlements
-    settlements = db.query(Settlement).filter(Settlement.room_id == room_id).all()
+    # A settlement only changes balances after the receiver approves it.
+    settlements = (
+        db.query(Settlement)
+        .filter(
+            Settlement.room_id == room_id,
+            Settlement.is_verified.is_(True),
+        )
+        .all()
+    )
     for s in settlements:
         # Payer paid off debt -> increases their net standing
         settlement_adjustments[s.payer_id] = settlement_adjustments.get(s.payer_id, 0.0) + s.amount

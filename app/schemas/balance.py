@@ -42,6 +42,15 @@ class SettlementOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+class SettlementNotificationOut(BaseModel):
+    settlement_id: int
+    room_id: int
+    room_name: str
+    payer: UserOut
+    amount: float
+    settled_at: datetime
+    notes: Optional[str] = None
+
 class SettlementVerifyOut(BaseModel):
     id: int
     is_verified: bool
@@ -49,4 +58,3 @@ class SettlementVerifyOut(BaseModel):
     verified_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-
