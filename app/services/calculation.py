@@ -111,18 +111,18 @@ def compute_room_balances(db: Session, room_id: int) -> BalanceSummary:
         debtor = debtors[d_idx]
         creditor = creditors[c_idx]
 
-        settle_amt = min(debtor["amount"], creditor["amount"])
-        if settle_amt > 0.01:
+        settle_amt = round(min(debtor["amount"], creditor["amount"]), 2)
+        if settle_amt >= 0.01:
             suggested_settlements.append(
                 DebtTransaction(
                     from_user=UserOut.model_validate(active_users[debtor["user_id"]]),
                     to_user=UserOut.model_validate(active_users[creditor["user_id"]]),
-                    amount=round(settle_amt, 2),
+                    amount=settle_amt,
                 )
             )
 
-        debtor["amount"] -= settle_amt
-        creditor["amount"] -= settle_amt
+        debtor["amount"] = round(debtor["amount"] - settle_amt, 2)
+        creditor["amount"] = round(creditor["amount"] - settle_amt, 2)
 
         if debtor["amount"] < 0.01:
             d_idx += 1
