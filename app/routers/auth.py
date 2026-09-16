@@ -24,7 +24,7 @@ from app.core.security import (
     verify_password,
 )
 from app.routers.deps import get_current_user
-from app.services.email import is_smtp_configured, send_password_reset_email
+from app.services.email import is_email_configured, send_password_reset_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -106,7 +106,7 @@ def forgot_password(
     email_sent = send_password_reset_email(user.email, reset_url)
 
     if (
-        (not is_smtp_configured() or not email_sent)
+        (not is_email_configured() or not email_sent)
         and settings.ENVIRONMENT.lower() != "production"
     ):
         response.reset_token = token

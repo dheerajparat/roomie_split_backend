@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     SMTP_USE_TLS: bool = True
     SMTP_TIMEOUT_SECONDS: int = 10
 
+    # Resend (recommended on cloud hosts – uses HTTPS, never blocked by firewalls)
+    # Get a free API key at https://resend.com
+    RESEND_API_KEY: Optional[str] = None
+    RESEND_FROM_EMAIL: Optional[str] = None  # e.g. "RoomieSplit <noreply@yourdomain.com>"
+
+
     model_config = SettingsConfigDict(
         env_file=[
             str(BASE_DIR / ".env"),
