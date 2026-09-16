@@ -103,9 +103,12 @@ def forgot_password(
     db.add(user)
     db.commit()
 
-    send_password_reset_email(user.email, reset_url)
+    email_sent = send_password_reset_email(user.email, reset_url)
 
-    if not is_smtp_configured() and settings.ENVIRONMENT.lower() != "production":
+    if (
+        (not is_smtp_configured() or not email_sent)
+        and settings.ENVIRONMENT.lower() != "production"
+    ):
         response.reset_token = token
         response.reset_url = reset_url
 

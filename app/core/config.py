@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: Optional[str] = None
     SMTP_FROM_EMAIL: Optional[str] = None
     SMTP_USE_TLS: bool = True
+    SMTP_TIMEOUT_SECONDS: int = 10
 
     model_config = SettingsConfigDict(
         env_file=[
