@@ -5,10 +5,13 @@ from app.core.config import settings
 from app.db.session import engine, Base
 import app.models  # Ensure all models are registered
 from app.routers import auth, rooms, expenses, balances
+from app.db.migrations import run_startup_migrations
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Automatically create tables in PostgreSQL
     Base.metadata.create_all(bind=engine)
+    run_startup_migrations()
     yield
 
 app = FastAPI(
