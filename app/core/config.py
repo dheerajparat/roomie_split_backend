@@ -32,6 +32,18 @@ class Settings(BaseSettings):
     BACKEND_PORT: int = 8000
     CORS_ORIGINS: str = "*"
 
+    # Password reset
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
+    FRONTEND_RESET_PASSWORD_URL: str = "http://localhost:3000/#/reset-password"
+
+    # Optional SMTP configuration for password reset emails
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_FROM_EMAIL: Optional[str] = None
+    SMTP_USE_TLS: bool = True
+
     model_config = SettingsConfigDict(
         env_file=[
             str(BASE_DIR / ".env"),

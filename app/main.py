@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.db.session import engine, Base
+from app.db.migrations import run_startup_migrations
 import app.models  # Ensure all models are registered
 from app.routers import auth, rooms, expenses, balances
 
@@ -10,6 +11,7 @@ from app.routers import auth, rooms, expenses, balances
 async def lifespan(app: FastAPI):
     # Automatically create tables in PostgreSQL
     Base.metadata.create_all(bind=engine)
+    run_startup_migrations()
     yield
 
 app = FastAPI(
