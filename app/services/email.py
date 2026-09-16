@@ -1,6 +1,7 @@
 import smtplib
 from email.message import EmailMessage
 import logging
+import socket
 
 from app.core.config import settings
 
@@ -25,6 +26,15 @@ def send_password_reset_email(to_email: str, reset_url: str) -> bool:
         "If you did not request this, you can ignore this email."
     )
 
+    # Patch socket.getaddrinfo to force IPv4. 
+    # Python 3.12+ Happy Eyeballs can mask IPv4 timeouts (e.g. firewall dropping port 587) 
+    # with IPv6 "Network Unreachable" errors. This forces the real IPv4 error to surface.
+    orig_getaddrinfo = socket.getaddrinfo
+    def getaddrinfo_ipv4(host, port, family=0, type=0, proto=0, flags=0):
+        responses = orig_getaddrinfo(host, port, family, type, proto, flags)
+        return [res for res in responses if res[0] == socket.AF_INET]
+    socket.getaddrinfo = getaddrinfo_ipv4
+
     try:
         with smtplib.SMTP(
             settings.SMTP_HOST,
@@ -40,6 +50,8 @@ def send_password_reset_email(to_email: str, reset_url: str) -> bool:
                 server.login(settings.SMTP_USERNAME, password)
             server.send_message(message)
         return True
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to send password reset email")
         return False
+    finally:
+        socket.getaddrinfo = orig_getaddrinfo
