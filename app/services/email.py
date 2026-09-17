@@ -1,8 +1,5 @@
 import smtplib
 import socket
-import urllib.request
-import urllib.error
-import json
 import logging
 from email.message import EmailMessage
 
@@ -62,35 +59,35 @@ def is_smtp_configured() -> bool:
 # ---------------------------------------------------------------------------
 
 def _send_via_resend(to_email: str, reset_url: str) -> bool:
-    """Send using Resend REST API (HTTPS, port 443 – never blocked)."""
-    payload = json.dumps({
-        "from": settings.RESEND_FROM_EMAIL or f"RoomieSplit <onboarding@resend.dev>",
-        "to": [to_email],
-        "subject": "Reset your RoomieSplit password",
-        "html": _build_reset_email_html(reset_url),
-        "text": _build_reset_email_text(reset_url),
-    }).encode("utf-8")
-
-    req = urllib.request.Request(
-        "https://api.resend.com/emails",
-        data=payload,
-        headers={
-            "Authorization": f"Bearer {settings.RESEND_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
+    """Send using the official Resend SDK (HTTPS, port 443 – never blocked)."""
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            body = resp.read()
-            logger.info("Resend email sent: %s", body)
-            return True
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")
-        logger.error("Resend API error %s: %s", e.code, body)
+        import resend  # installed via requirements.txt
+    except ImportError:
+        logger.error(
+            "resend package not installed. Run: pip install resend"
+        )
         return False
+
+    resend.api_key = settings.RESEND_API_KEY
+
+    from_addr = (
+        settings.RESEND_FROM_EMAIL
+        or "RoomieSplit <onboarding@resend.dev>"
+    )
+
+    try:
+        params: resend.Emails.SendParams = {
+            "from": from_addr,
+            "to": [to_email],
+            "subject": "Reset your RoomieSplit password",
+            "html": _build_reset_email_html(reset_url),
+            "text": _build_reset_email_text(reset_url),
+        }
+        response = resend.Emails.send(params)
+        logger.info("Resend email sent: id=%s", response.get("id"))
+        return True
     except Exception:
-        logger.exception("Resend request failed")
+        logger.exception("Resend SDK send failed")
         return False
 
 
