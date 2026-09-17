@@ -1,9 +1,12 @@
 from datetime import datetime, timedelta, timezone
 from typing import List
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.user import (
@@ -85,7 +88,8 @@ def forgot_password(
     reset_request: ForgotPasswordRequest,
     db: Session = Depends(get_db),
 ):
-    user = db.query(User).filter(User.email == reset_request.email).first()
+    req_email = str(reset_request.email).strip().lower()
+    user = db.query(User).filter(User.email.ilike(req_email)).first()
     response = ForgotPasswordResponse(message=RESET_REQUEST_MESSAGE)
 
     if not user:
@@ -103,14 +107,26 @@ def forgot_password(
     db.add(user)
     db.commit()
 
-    email_sent = send_password_reset_email(user.email, reset_url)
+    # Try sending email only if an email provider is actually configured
+    if is_email_configured():
+        try:
+            send_password_reset_email(user.email, reset_url)
+        except Exception as e:
+            logger.warning("Failed to send email: %s", e)
 
-    if (
-        (not is_email_configured() or not email_sent)
-        and settings.ENVIRONMENT.lower() != "production"
-    ):
+    # Check if this user is an admin / owner
+    is_admin = (
+        user.email.lower() in settings.admin_emails_list
+        or req_email in settings.admin_emails_list
+    )
+
+    # Return reset_token and reset_url directly for admin (or dev environment)
+    if is_admin or settings.ENVIRONMENT.lower() != "production":
         response.reset_token = token
         response.reset_url = reset_url
+        logger.info("🔑 [DIRECT RESET] User: %s", user.email)
+        logger.info("🔑 [DIRECT RESET] Token: %s", token)
+        logger.info("🔑 [DIRECT RESET] Reset URL: %s", reset_url)
 
     return response
 

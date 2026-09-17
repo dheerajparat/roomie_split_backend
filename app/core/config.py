@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
     FRONTEND_RESET_PASSWORD_URL: str = "http://localhost:3000/#/reset-password"
 
+    # Admin emails that can always reset password directly (token returned in response)
+    ADMIN_EMAILS: str = "dk1747056@gmail.com,dheerajparat@gmail.com"
+
     # Optional SMTP configuration for password reset emails
     SMTP_HOST: Optional[str] = None
     SMTP_PORT: int = 587
@@ -87,6 +90,10 @@ class Settings(BaseSettings):
             for origin in self.CORS_ORIGINS.split(",")
             if origin.strip()
         ]
+
+    @property
+    def admin_emails_list(self) -> list[str]:
+        return [e.strip().lower() for e in self.ADMIN_EMAILS.split(",") if e.strip()]
 
 
 settings = Settings()
