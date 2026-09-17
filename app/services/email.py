@@ -70,10 +70,24 @@ def _send_via_resend(to_email: str, reset_url: str) -> bool:
 
     resend.api_key = settings.RESEND_API_KEY
 
-    from_addr = (
-        settings.RESEND_FROM_EMAIL
-        or "RoomieSplit <onboarding@resend.dev>"
-    )
+    # Free email providers (gmail, yahoo, etc.) cannot be used as Resend senders.
+    # Only verified custom domains or Resend's own sandbox address are allowed.
+    _FREE_DOMAINS = {"gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "live.com"}
+    configured_from = settings.RESEND_FROM_EMAIL or ""
+    # Extract domain from "Name <email@domain.com>" or "email@domain.com"
+    _addr = configured_from.split("<")[-1].rstrip(">").strip()
+    _domain = _addr.split("@")[-1].lower() if "@" in _addr else ""
+    if not configured_from or _domain in _FREE_DOMAINS:
+        if configured_from:
+            logger.warning(
+                "RESEND_FROM_EMAIL uses a free email domain (%s) which Resend does not allow. "
+                "Falling back to sandbox sender. To send to any user, verify your own domain at "
+                "https://resend.com/domains and set RESEND_FROM_EMAIL to noreply@yourdomain.com",
+                _domain,
+            )
+        from_addr = "RoomieSplit <onboarding@resend.dev>"
+    else:
+        from_addr = configured_from
 
     try:
         params: resend.Emails.SendParams = {
