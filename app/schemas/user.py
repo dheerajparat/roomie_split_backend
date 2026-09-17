@@ -41,6 +41,17 @@ class ResetPasswordRequest(BaseModel):
             raise ValueError("Password cannot be longer than 72 bytes.")
         return value
 
+class DirectResetPasswordRequest(BaseModel):
+    username_or_email: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_bcrypt_password_length(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > MAX_BCRYPT_PASSWORD_BYTES:
+            raise ValueError("Password cannot be longer than 72 bytes.")
+        return value
+
 class MessageResponse(BaseModel):
     message: str
 

@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.user import (
+    DirectResetPasswordRequest,
     ForgotPasswordRequest,
     ForgotPasswordResponse,
     MessageResponse,
@@ -107,28 +108,49 @@ def forgot_password(
     db.add(user)
     db.commit()
 
-    # Try sending email only if an email provider is actually configured
-    if is_email_configured():
-        try:
-            send_password_reset_email(user.email, reset_url)
-        except Exception as e:
-            logger.warning("Failed to send email: %s", e)
+    # Always return reset_token & reset_url directly (no email sending!)
+    response.reset_token = token
+    response.reset_url = reset_url
 
-    # Check if this user is an admin / owner
-    is_admin = (
-        user.email.lower() in settings.admin_emails_list
-        or req_email in settings.admin_emails_list
-    )
-
-    # Return reset_token and reset_url directly for admin (or dev environment)
-    if is_admin or settings.ENVIRONMENT.lower() != "production":
-        response.reset_token = token
-        response.reset_url = reset_url
-        logger.info("🔑 [DIRECT RESET] User: %s", user.email)
-        logger.info("🔑 [DIRECT RESET] Token: %s", token)
-        logger.info("🔑 [DIRECT RESET] Reset URL: %s", reset_url)
+    print(f"\n=======================================================", flush=True)
+    print(f"🔑 [PASSWORD RESET REQUEST]", flush=True)
+    print(f"   User:  {user.username} ({user.email})", flush=True)
+    print(f"   Token: {token}", flush=True)
+    print(f"   URL:   {reset_url}", flush=True)
+    print(f"=======================================================\n", flush=True)
 
     return response
+
+@router.post("/direct-reset-password", response_model=MessageResponse)
+def direct_reset_password(
+    reset_data: DirectResetPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    identifier = reset_data.username_or_email.strip().lower()
+    user = db.query(User).filter(
+        or_(
+            User.email.ilike(identifier),
+            User.username.ilike(identifier),
+        )
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found with this username or email.",
+        )
+
+    user.hashed_password = get_password_hash(reset_data.new_password)
+    user.reset_password_token_hash = None
+    user.reset_password_expires_at = None
+    db.add(user)
+    db.commit()
+
+    print(f"\n🔑 [DIRECT RESET] Password updated for {user.username} ({user.email})\n", flush=True)
+
+    return MessageResponse(
+        message=f"Password for '{user.username}' reset successfully! You can now log in."
+    )
 
 @router.post("/reset-password", response_model=MessageResponse)
 def reset_password(
