@@ -45,7 +45,15 @@ class Settings(BaseSettings):
     SMTP_USE_TLS: bool = True
     SMTP_TIMEOUT_SECONDS: int = 10
 
-    # Resend (recommended on cloud hosts – uses HTTPS, never blocked by firewalls)
+    # Brevo (formerly Sendinblue) — RECOMMENDED for cloud deployments
+    # Free: 300 emails/day. No custom domain needed — just verify your sender email.
+    # Sign up: https://app.brevo.com  →  Settings → Senders & IP → Add a sender email
+    # API key: https://app.brevo.com/settings/keys/api
+    BREVO_API_KEY: Optional[str] = None
+    BREVO_FROM_EMAIL: Optional[str] = None   # e.g. "dk1747056@gmail.com" (must be verified sender)
+    BREVO_SENDER_EMAIL: Optional[str] = None  # alias for BREVO_FROM_EMAIL
+
+    # Resend — requires verified custom domain to send to arbitrary recipients
     # Get a free API key at https://resend.com
     RESEND_API_KEY: Optional[str] = None
     RESEND_FROM_EMAIL: Optional[str] = None  # e.g. "RoomieSplit <noreply@yourdomain.com>"

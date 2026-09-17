@@ -1,5 +1,8 @@
 import smtplib
 import socket
+import urllib.request
+import urllib.error
+import json
 import logging
 from email.message import EmailMessage
 
@@ -7,8 +10,9 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+
 # ---------------------------------------------------------------------------
-# Helpers
+# Email body builders
 # ---------------------------------------------------------------------------
 
 def _build_reset_email_html(reset_url: str) -> str:
@@ -29,6 +33,7 @@ def _build_reset_email_html(reset_url: str) -> str:
     </div>
     """
 
+
 def _build_reset_email_text(reset_url: str) -> str:
     return (
         "We received a request to reset your RoomieSplit password.\n\n"
@@ -44,50 +49,88 @@ def _build_reset_email_text(reset_url: str) -> str:
 
 def is_email_configured() -> bool:
     """Return True if at least one email provider is configured."""
-    return bool(settings.RESEND_API_KEY) or bool(
-        settings.SMTP_HOST and settings.SMTP_FROM_EMAIL
+    return (
+        bool(settings.BREVO_API_KEY)
+        or bool(settings.RESEND_API_KEY)
+        or bool(settings.SMTP_HOST and settings.SMTP_FROM_EMAIL)
     )
 
 
-# Keep the old name for backwards-compat with auth.py
+# Keep old name as alias (used in auth.py)
 def is_smtp_configured() -> bool:
     return is_email_configured()
 
 
 # ---------------------------------------------------------------------------
-# Resend (HTTPS – works on any cloud host)
+# Brevo / Sendinblue  (RECOMMENDED – free 300/day, no domain needed)
+# HTTPS API → port 443, never blocked by cloud firewalls.
+# Just verify your sender email at https://app.brevo.com/senders
+# ---------------------------------------------------------------------------
+
+def _send_via_brevo(to_email: str, reset_url: str) -> bool:
+    payload = json.dumps({
+        "sender": {
+            "name": "RoomieSplit",
+            "email": settings.BREVO_FROM_EMAIL or settings.BREVO_SENDER_EMAIL,
+        },
+        "to": [{"email": to_email}],
+        "subject": "Reset your RoomieSplit password",
+        "htmlContent": _build_reset_email_html(reset_url),
+        "textContent": _build_reset_email_text(reset_url),
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        "https://api.brevo.com/v3/smtp/email",
+        data=payload,
+        headers={
+            "api-key": settings.BREVO_API_KEY,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = json.loads(resp.read())
+            logger.info("Brevo email sent: messageId=%s", body.get("messageId"))
+            return True
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        logger.error("Brevo API error %s: %s", e.code, body)
+        return False
+    except Exception:
+        logger.exception("Brevo send failed")
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Resend  (requires verified custom domain for non-sandbox recipients)
 # ---------------------------------------------------------------------------
 
 def _send_via_resend(to_email: str, reset_url: str) -> bool:
-    """Send using the official Resend SDK (HTTPS, port 443 – never blocked)."""
     try:
-        import resend  # installed via requirements.txt
+        import resend
     except ImportError:
-        logger.error(
-            "resend package not installed. Run: pip install resend"
-        )
+        logger.error("resend package not installed. Run: pip install resend")
         return False
 
     resend.api_key = settings.RESEND_API_KEY
 
-    # Free email providers (gmail, yahoo, etc.) cannot be used as Resend senders.
-    # Only verified custom domains or Resend's own sandbox address are allowed.
-    _FREE_DOMAINS = {"gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "live.com"}
-    configured_from = settings.RESEND_FROM_EMAIL or ""
-    # Extract domain from "Name <email@domain.com>" or "email@domain.com"
-    _addr = configured_from.split("<")[-1].rstrip(">").strip()
+    # Resend does not allow free email domains (gmail, yahoo…) as sender.
+    _FREE = {"gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "live.com"}
+    raw = settings.RESEND_FROM_EMAIL or ""
+    _addr = raw.split("<")[-1].rstrip(">").strip()
     _domain = _addr.split("@")[-1].lower() if "@" in _addr else ""
-    if not configured_from or _domain in _FREE_DOMAINS:
-        if configured_from:
+    if not raw or _domain in _FREE:
+        if raw:
             logger.warning(
-                "RESEND_FROM_EMAIL uses a free email domain (%s) which Resend does not allow. "
-                "Falling back to sandbox sender. To send to any user, verify your own domain at "
-                "https://resend.com/domains and set RESEND_FROM_EMAIL to noreply@yourdomain.com",
+                "RESEND_FROM_EMAIL uses %s which Resend does not allow. "
+                "Verify a custom domain at https://resend.com/domains",
                 _domain,
             )
         from_addr = "RoomieSplit <onboarding@resend.dev>"
     else:
-        from_addr = configured_from
+        from_addr = raw
 
     try:
         params: resend.Emails.SendParams = {
@@ -106,11 +149,10 @@ def _send_via_resend(to_email: str, reset_url: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# SMTP fallback
+# SMTP fallback  (usually blocked on cloud hosts — use Brevo instead)
 # ---------------------------------------------------------------------------
 
 def _send_via_smtp(to_email: str, reset_url: str) -> bool:
-    """Send via SMTP (requires port 587/465 to be open on the host)."""
     message = EmailMessage()
     message["Subject"] = "Reset your RoomieSplit password"
     message["From"] = settings.SMTP_FROM_EMAIL
@@ -118,13 +160,13 @@ def _send_via_smtp(to_email: str, reset_url: str) -> bool:
     message.set_content(_build_reset_email_text(reset_url))
     message.add_alternative(_build_reset_email_html(reset_url), subtype="html")
 
-    # Force IPv4 to avoid Python 3.12+ Happy-Eyeballs masking real errors with
-    # IPv6 "Network is unreachable" when IPv4 is being silently firewall-dropped.
+    # Force IPv4 — Python 3.12+ Happy-Eyeballs can hide firewall timeouts
+    # behind an instant IPv6 "Network is unreachable" error.
     orig_getaddrinfo = socket.getaddrinfo
-    def _getaddrinfo_ipv4(host, port, family=0, type=0, proto=0, flags=0):
+    def _ipv4_only(host, port, family=0, type=0, proto=0, flags=0):
         return [r for r in orig_getaddrinfo(host, port, family, type, proto, flags)
                 if r[0] == socket.AF_INET]
-    socket.getaddrinfo = _getaddrinfo_ipv4
+    socket.getaddrinfo = _ipv4_only
 
     try:
         with smtplib.SMTP(
@@ -149,14 +191,19 @@ def _send_via_smtp(to_email: str, reset_url: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Public interface
+# Public interface — priority: Brevo → Resend → SMTP
 # ---------------------------------------------------------------------------
 
 def send_password_reset_email(to_email: str, reset_url: str) -> bool:
     """
-    Send a password-reset email.
-    Uses Resend (HTTPS) if RESEND_API_KEY is set, otherwise falls back to SMTP.
+    Send a password-reset email using the first configured provider:
+      1. Brevo  (BREVO_API_KEY)  — recommended, free 300/day, no domain needed
+      2. Resend (RESEND_API_KEY) — needs verified custom domain for real users
+      3. SMTP   (SMTP_HOST)      — usually blocked by cloud host firewalls
     """
+    if settings.BREVO_API_KEY:
+        return _send_via_brevo(to_email, reset_url)
+
     if settings.RESEND_API_KEY:
         return _send_via_resend(to_email, reset_url)
 
@@ -165,6 +212,6 @@ def send_password_reset_email(to_email: str, reset_url: str) -> bool:
 
     logger.warning(
         "No email provider configured. "
-        "Set RESEND_API_KEY (recommended) or SMTP_* variables."
+        "Set BREVO_API_KEY (recommended) in your .env to enable password reset emails."
     )
     return False
