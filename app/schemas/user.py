@@ -45,7 +45,7 @@ class ResetPasswordRequest(BaseModel):
 class DirectResetPasswordRequest(BaseModel):
     username_or_email: str
     new_password: str
-    marster_password: str
+    master_password: str
 
     @field_validator("new_password")
     @classmethod
