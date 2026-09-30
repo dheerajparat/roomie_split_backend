@@ -112,12 +112,8 @@ def forgot_password(
     response.reset_token = token
     response.reset_url = reset_url
 
-    print(f"\n=======================================================", flush=True)
-    print(f"🔑 [PASSWORD RESET REQUEST]", flush=True)
-    print(f"   User:  {user.username} ({user.email})", flush=True)
-    print(f"   Token: {token}", flush=True)
-    print(f"   URL:   {reset_url}", flush=True)
-    print(f"=======================================================\n", flush=True)
+    if not send_password_reset_email(user.email, reset_url):
+    logger.error("Failed to send password reset email to %s", user.email)
 
     return response
 
