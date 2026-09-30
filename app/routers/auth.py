@@ -126,6 +126,11 @@ def direct_reset_password(
     reset_data: DirectResetPasswordRequest,
     db: Session = Depends(get_db),
 ):
+    if reset_data.master_password != settings.DIRECT_RESET_PASSWORD:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid master password.",
+        )
     identifier = reset_data.username_or_email.strip().lower()
     user = db.query(User).filter(
         or_(
