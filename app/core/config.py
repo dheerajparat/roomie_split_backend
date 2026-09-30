@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     # Required in .env. Generate with: openssl rand -hex 32
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
+    DIRECT_RESET_PASSWORD: str
     
 
     # PostgreSQL Database
