@@ -113,7 +113,7 @@ def forgot_password(
     response.reset_url = reset_url
 
     if not send_password_reset_email(user.email, reset_url):
-    logger.error("Failed to send password reset email to %s", user.email)
+        logger.error("Failed to send password reset email to %s", user.email)
 
     return response
 
