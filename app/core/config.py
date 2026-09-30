@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     # Required in .env. Generate with: openssl rand -hex 32
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 days
+    
 
     # PostgreSQL Database
     POSTGRES_USER: str = "parat"
