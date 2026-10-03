@@ -5,6 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from app.core.config import settings
+from html import escape
+from urllib.parse import quote
+from fastapi.responses import HTMLResponse
 
 logger = logging.getLogger(__name__)
 from app.db.session import get_db
