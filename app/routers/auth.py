@@ -93,32 +93,51 @@ def forgot_password(
     db: Session = Depends(get_db),
 ):
     req_email = str(reset_request.email).strip().lower()
-    user = db.query(User).filter(User.email.ilike(req_email)).first()
-    response = ForgotPasswordResponse(message=RESET_REQUEST_MESSAGE)
 
+    user = db.query(User).filter(
+        User.email.ilike(req_email)
+    ).first()
+
+    # Don't reveal whether the email exists
     if not user:
-        return response
+        return ForgotPasswordResponse(
+            message="If this email exists, a password reset link has been sent."
+        )
 
+    # Generate random reset token
     token = create_password_reset_token()
+
+    # Store only the hash in database
     token_hash = get_password_reset_token_hash(token)
+
+    # Token valid for 10 minutes
     expires_at = datetime.now(timezone.utc) + timedelta(
         minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
     )
-    reset_url = f"{settings.FRONTEND_RESET_PASSWORD_URL}?token={token}"
 
+    # URL that will be sent through email
+    reset_url = (
+        f"{settings.PASSWORD_RESET_WEB_URL}"
+        f"?token={quote(token, safe='')}"
+    )
+
+    # Save reset information
     user.reset_password_token_hash = token_hash
     user.reset_password_expires_at = expires_at
+
     db.add(user)
     db.commit()
 
-    # Always return reset_token & reset_url directly (no email sending!)
-    response.reset_token = token
-    response.reset_url = reset_url
-
+    # Send email
     if not send_password_reset_email(user.email, reset_url):
-        logger.error("Failed to send password reset email to %s", user.email)
+        logger.error(
+            "Failed to send password reset email to %s",
+            user.email,
+        )
 
-    return response
+    return ForgotPasswordResponse(
+        message="If this email exists, a password reset link has been sent."
+    )
 
 @router.post("/direct-reset-password", response_model=MessageResponse)
 def direct_reset_password(
