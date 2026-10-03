@@ -60,49 +60,6 @@ def is_email_configured() -> bool:
 def is_smtp_configured() -> bool:
     return is_email_configured()
 
-
-# ---------------------------------------------------------------------------
-# Brevo / Sendinblue  (RECOMMENDED – free 300/day, no domain needed)
-# HTTPS API → port 443, never blocked by cloud firewalls.
-# Just verify your sender email at https://app.brevo.com/senders
-# ---------------------------------------------------------------------------
-
-def _send_via_brevo(to_email: str, reset_url: str) -> bool:
-    payload = json.dumps({
-        "sender": {
-            "name": "RoomieSplit",
-            "email": settings.BREVO_FROM_EMAIL or settings.BREVO_SENDER_EMAIL,
-        },
-        "to": [{"email": to_email}],
-        "subject": "Reset your RoomieSplit password",
-        "htmlContent": _build_reset_email_html(reset_url),
-        "textContent": _build_reset_email_text(reset_url),
-    }).encode("utf-8")
-
-    req = urllib.request.Request(
-        "https://api.brevo.com/v3/smtp/email",
-        data=payload,
-        headers={
-            "api-key": settings.BREVO_API_KEY,
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            body = json.loads(resp.read())
-            logger.info("Brevo email sent: messageId=%s", body.get("messageId"))
-            return True
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")
-        logger.error("Brevo API error %s: %s", e.code, body)
-        return False
-    except Exception:
-        logger.exception("Brevo send failed")
-        return False
-
-
 # ---------------------------------------------------------------------------
 # Resend  (requires verified custom domain for non-sandbox recipients)
 # ---------------------------------------------------------------------------
@@ -146,6 +103,49 @@ def _send_via_resend(to_email: str, reset_url: str) -> bool:
     except Exception:
         logger.exception("Resend SDK send failed")
         return False
+
+
+# ---------------------------------------------------------------------------
+# Brevo / Sendinblue  (RECOMMENDED – free 300/day, no domain needed)
+# HTTPS API → port 443, never blocked by cloud firewalls.
+# Just verify your sender email at https://app.brevo.com/senders
+# ---------------------------------------------------------------------------
+
+def _send_via_brevo(to_email: str, reset_url: str) -> bool:
+    payload = json.dumps({
+        "sender": {
+            "name": "RoomieSplit",
+            "email": settings.BREVO_FROM_EMAIL or settings.BREVO_SENDER_EMAIL,
+        },
+        "to": [{"email": to_email}],
+        "subject": "Reset your RoomieSplit password",
+        "htmlContent": _build_reset_email_html(reset_url),
+        "textContent": _build_reset_email_text(reset_url),
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        "https://api.brevo.com/v3/smtp/email",
+        data=payload,
+        headers={
+            "api-key": settings.BREVO_API_KEY,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = json.loads(resp.read())
+            logger.info("Brevo email sent: messageId=%s", body.get("messageId"))
+            return True
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        logger.error("Brevo API error %s: %s", e.code, body)
+        return False
+    except Exception:
+        logger.exception("Brevo send failed")
+        return False
+
 
 
 # ---------------------------------------------------------------------------
