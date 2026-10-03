@@ -233,3 +233,282 @@ def search_users(
         .all()
     )
     return [UserOut.model_validate(u) for u in users]
+@router.get("/forgetpassword", response_class=HTMLResponse)
+def forget_password_page(token: str):
+    safe_token = escape(token, quote=True)
+
+    return HTMLResponse(
+        content=f"""
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Reset Password - RoomieSplit</title>
+
+    <style>
+        * {{
+            box-sizing: border-box;
+        }}
+
+        body {{
+            margin: 0;
+            min-height: 100vh;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            font-family: Arial, sans-serif;
+
+            background: #f5f7fb;
+        }}
+
+        .card {{
+            width: min(420px, 92%);
+
+            padding: 30px;
+
+            background: white;
+
+            border-radius: 16px;
+
+            box-shadow:
+                0 10px 35px rgba(0, 0, 0, 0.10);
+        }}
+
+        h2 {{
+            margin-top: 0;
+            margin-bottom: 8px;
+        }}
+
+        .subtitle {{
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 24px;
+        }}
+
+        label {{
+            display: block;
+
+            margin-top: 16px;
+            margin-bottom: 7px;
+
+            font-weight: 600;
+        }}
+
+        input {{
+            width: 100%;
+
+            padding: 13px;
+
+            border: 1px solid #d1d5db;
+            border-radius: 9px;
+
+            font-size: 16px;
+
+            outline: none;
+        }}
+
+        input:focus {{
+            border-color: #2563eb;
+        }}
+
+        button {{
+            width: 100%;
+
+            margin-top: 22px;
+
+            padding: 13px;
+
+            border: none;
+            border-radius: 9px;
+
+            background: #2563eb;
+            color: white;
+
+            font-size: 16px;
+            font-weight: 600;
+
+            cursor: pointer;
+        }}
+
+        button:disabled {{
+            opacity: 0.6;
+            cursor: not-allowed;
+        }}
+
+        #message {{
+            margin-top: 16px;
+            font-size: 14px;
+        }}
+
+        .success {{
+            color: #15803d;
+        }}
+
+        .error {{
+            color: #dc2626;
+        }}
+    </style>
+</head>
+
+<body>
+
+<div class="card">
+
+    <h2>Reset Password</h2>
+
+    <div class="subtitle">
+        Create a new password for your RoomieSplit account.
+        This link is valid for 10 minutes.
+    </div>
+
+    <form id="resetForm">
+
+        <label for="password">
+            New Password
+        </label>
+
+        <input
+            id="password"
+            type="password"
+            required
+            autocomplete="new-password"
+        >
+
+        <label for="confirmPassword">
+            Confirm Password
+        </label>
+
+        <input
+            id="confirmPassword"
+            type="password"
+            required
+            autocomplete="new-password"
+        >
+
+        <input
+            type="hidden"
+            id="token"
+            value="{safe_token}"
+        >
+
+        <button
+            id="submitButton"
+            type="submit"
+        >
+            Reset Password
+        </button>
+
+    </form>
+
+    <div id="message"></div>
+
+</div>
+
+<script>
+
+const form = document.getElementById("resetForm");
+const message = document.getElementById("message");
+const button = document.getElementById("submitButton");
+
+form.addEventListener("submit", async function(event) {{
+
+    event.preventDefault();
+
+    const password =
+        document.getElementById("password").value;
+
+    const confirmPassword =
+        document.getElementById("confirmPassword").value;
+
+    const token =
+        document.getElementById("token").value;
+
+    message.className = "";
+
+    if (password !== confirmPassword) {{
+
+        message.textContent =
+            "Passwords do not match.";
+
+        message.className = "error";
+
+        return;
+    }}
+
+    button.disabled = true;
+    button.textContent = "Resetting...";
+
+    try {{
+
+        const response = await fetch(
+            "/api/auth/reset-password",
+            {{
+                method: "POST",
+
+                headers: {{
+                    "Content-Type": "application/json"
+                }},
+
+                body: JSON.stringify({{
+                    token: token,
+                    new_password: password
+                }})
+            }}
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {{
+
+            message.textContent =
+                data.detail ||
+                "Invalid or expired reset link.";
+
+            message.className = "error";
+
+            button.disabled = false;
+            button.textContent = "Reset Password";
+
+            return;
+        }}
+
+        message.textContent =
+            data.message ||
+            "Password reset successfully.";
+
+        message.className = "success";
+
+        form.reset();
+
+        button.disabled = true;
+        button.textContent = "Password Reset";
+
+    }} catch (error) {{
+
+        message.textContent =
+            "Unable to connect to the server.";
+
+        message.className = "error";
+
+        button.disabled = false;
+        button.textContent = "Reset Password";
+    }}
+
+}});
+
+</script>
+
+</body>
+
+</html>
+"""
+    )
