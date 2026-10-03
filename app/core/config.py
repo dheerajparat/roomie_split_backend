@@ -34,8 +34,13 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "*"
 
     # Password reset
-    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
-    FRONTEND_RESET_PASSWORD_URL: str = "http://localhost:3000/#/reset-password"
+    # Password reset
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 10
+
+    # Public backend webpage used by password-reset emails
+    PASSWORD_RESET_WEB_URL: str = (
+        "https://YOUR-RAILWAY-DOMAIN/api/auth/forgetpassword"
+    )
 
     # Admin emails that can always reset password directly (token returned in response)
     ADMIN_EMAILS: str = "dk1747056@gmail.com,dheerajparat@gmail.com"
